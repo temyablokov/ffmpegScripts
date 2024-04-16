@@ -2,31 +2,25 @@ import os.path
 import subprocess
 import ffmpeg
 
-
-def encode_yuv(yuv_file):
+def encode_yuv(yuv_file, bitrates):
     base_name = os.path.splitext(yuv_file)[0]
 
-    output_h264 = base_name + "_h264.mp4"
-    output_h265 = base_name + "_h265.mp4"
-    output_vp9 = base_name + "_vp9.webm"
-    output_av1 = base_name + "_av1.mp4"
+    codecs = ['libx264', 'libx265', 'libvpx-vp9', 'libsvtav1']
+    extensions = ['mp4', 'mp4', 'webm', 'mp4']
 
-    ffmpeg.input(
-        yuv_file, format='rawvideo', pix_fmt='yuv420p', s='1920x1080'
-    ).output(output_h264, vcodec='libx264').run()
-    ffmpeg.input(
-        yuv_file, format='rawvideo', pix_fmt='yuv420p', s='1920x1080'
-    ).output(output_h265, vcodec='libx265').run()
-    ffmpeg.input(
-        yuv_file, format='rawvideo', pix_fmt='yuv420p', s='1920x1080'
-    ).output(output_vp9, vcodec='libvpx-vp9').run()
-    ffmpeg.input(
-        yuv_file, format='rawvideo', pix_fmt='yuv420p', s='1920x1080'
-    ).output(output_av1, vcodec='libsvtav1').run()
+    outputs = []
 
-    return output_h264, output_h265, output_vp9, output_av1
+    for bitrate in bitrates:
+        for codec, ext in zip(codecs, extensions):
+            output_name = f"{base_name}_{codec}_{bitrate}M.{ext}"
 
+            ffmpeg.input(
+                yuv_file, format='rawvideo', pix_fmt='yuv420p', s='1920x1080'#, r=30
+            ).output(output_name, vcodec=codec, b=f'{bitrate}M', t=5, r=30).run()
 
+            outputs.append(output_name)
+
+    return outputs
 
 def calculate_metrics(ref, dist, metrics_list):
     command = ['ffmpeg-quality-metrics', dist, ref, '-m'] + metrics_list
@@ -51,16 +45,15 @@ def calculate_metrics(ref, dist, metrics_list):
         print(f"Ошибка: {e}")
         print(f"Вывод ошибки: {e.output}")
 
+# Путь к файлу с видео
+yuv_name = "D:\\SystemFolders\\Videos\\video_samples\\WITCHER3.y4m"
 
-# encode_yuv("D:\SystemFolders\Videos\BBBunny\output.y4m")
+# Список битрейтов
+bitrates = [2, 5]
+
+encoded_files = encode_yuv(yuv_name, bitrates)
 
 metrics = ['psnr', 'ssim', 'vmaf']
-yuv_name = "D:\SystemFolders\Videos\BBBunny\output.y4m"
-h264 = "D:\SystemFolders\Videos\BBBunny\output_h264.mp4"
-h265 = "D:\SystemFolders\Videos\BBBunny\output_h265.mp4"
-vp9 = "D:\SystemFolders\Videos\BBBunny\output_vp9.webm"
-av1 = "D:\SystemFolders\Videos\BBBunny\output_av1.mp4"
-calculate_metrics(yuv_name, h264, metrics)
-calculate_metrics(yuv_name, h265, metrics)
-calculate_metrics(yuv_name, vp9, metrics)
-calculate_metrics(yuv_name, av1, metrics)
+
+for encoded_file in encoded_files:
+    calculate_metrics(yuv_name, encoded_file, metrics)

@@ -8,38 +8,38 @@ def parse_json_metrics(file):
         content = file.read()
 
     vmaf_dict = {
-        "integer_adm2": [],
-        "integer_adm_scale0": [],
-        "integer_adm_scale1": [],
-        "integer_adm_scale2": [],
-        "integer_adm_scale3": [],
-        "integer_motion2": [],
-        "integer_motion": [],
-        "integer_vif_scale0": [],
-        "integer_vif_scale1": [],
-        "integer_vif_scale2": [],
-        "integer_vif_scale3": [],
+        # "integer_adm2": [],
+        # "integer_adm_scale0": [],
+        # "integer_adm_scale1": [],
+        # "integer_adm_scale2": [],
+        # "integer_adm_scale3": [],
+        # "integer_motion2": [],
+        # "integer_motion": [],
+        # "integer_vif_scale0": [],
+        # "integer_vif_scale1": [],
+        # "integer_vif_scale2": [],
+        # "integer_vif_scale3": [],
         "vmaf": [],
         "n": []
     }
 
     psnr_dict = {
                 "n": [],
-                "mse_avg": [],
-                "mse_y": [],
-                "mse_u": [],
-                "mse_v": [],
+                # "mse_avg": [],
+                # "mse_y": [],
+                # "mse_u": [],
+                # "mse_v": [],
                 "psnr_avg": [],
-                "psnr_y": [],
-                "psnr_u": [],
-                "psnr_v": []
+                # "psnr_y": [],
+                # "psnr_u": [],
+                # "psnr_v": []
             }
 
     ssim_dict = {
                 "n": [],
-                "ssim_y": [],
-                "ssim_u": [],
-                "ssim_v": [],
+                # "ssim_y": [],
+                # "ssim_u": [],
+                # "ssim_v": [],
                 "ssim_avg": []
             }
 
