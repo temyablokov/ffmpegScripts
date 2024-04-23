@@ -1,6 +1,8 @@
 import json
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+import re
+import os
 
 def parse_json_metrics(file):
 
@@ -29,18 +31,18 @@ def parse_json_metrics(file):
                 # "mse_y": [],
                 # "mse_u": [],
                 # "mse_v": [],
-                "psnr_avg": [],
+                "psnr_avg": []
                 # "psnr_y": [],
                 # "psnr_u": [],
                 # "psnr_v": []
             }
 
     ssim_dict = {
-                "n": [],
+                # "n": [],
                 # "ssim_y": [],
                 # "ssim_u": [],
                 # "ssim_v": [],
-                "ssim_avg": []
+                # "ssim_avg": []
             }
 
     vmaf_keys = vmaf_dict.keys()
@@ -48,6 +50,7 @@ def parse_json_metrics(file):
     psnr_keys = psnr_dict.keys()
 
     data = json.loads(content)
+
     for item in data['vmaf']:
         for key in vmaf_keys:
             vmaf_dict[key].append(item[key])
@@ -62,63 +65,66 @@ def parse_json_metrics(file):
 
     return vmaf_dict, psnr_dict, ssim_dict
 
-def plot_metrics(metrics_data_list, codec_names, metric_name):
-    metrics_keys = list(metrics_data_list[0].keys())
-    metrics_keys.remove('n')
+def extract_name(filename):
+    pattern = r'(\w+)_lib((\w+[-\w]+)_(\d+)M)_vs_(\w+)_metrics\.txt'
+    match = re.match(pattern, filename)
+    if match:
+        codec = match.group(2)
+        bitrate = f"{match.group(3)}M"
+        return codec, bitrate
+    return None, None
 
-    rows = len(metrics_keys)
-    cols = 1
+def plot_metrics_from_files(dir, metrics_to_plot):
+    metrics = {
+        'vmaf': 'VMAF Metrics',
+        'psnr': 'PSNR Metrics',
+        'ssim': 'SSIM Metrics'
+    }
 
-    fig = make_subplots(rows=rows, cols=cols, shared_xaxes=True,
-                        subplot_titles=[f'{submetric} comparison for codecs' for submetric in metrics_keys],
-                        vertical_spacing=0.01,
-                        horizontal_spacing=0.05
-                        )
+    metric_dict = {
+        'vmaf': {},
+        'psnr': {},
+        'ssim': {}
+    }
 
-    for i, submetric in enumerate(metrics_keys, start=1):
-        for metrics_data, codec_name in zip(metrics_data_list, codec_names):
-            fig.add_trace(go.Scatter(x=metrics_data['n'], y=metrics_data[submetric], mode='lines', 
-                                     name=codec_name, line=dict(width=0.9)),
-                          row=i, col=1)
+    for filename in os.listdir(dir):
+        if filename.endswith('metrics.txt'):
+            codec, bitrate = extract_name(filename)
+            if codec:
+                vmaf_data, psnr_data, ssim_data = parse_json_metrics(os.path.join(dir, filename))
 
-    fig.update_xaxes(title_text='Frame', row=rows, col=1)
-    fig.update_yaxes(title_text=metric_name, col=1)
+                for metric_name, metric_data in zip(['vmaf', 'psnr', 'ssim'], [vmaf_data, psnr_data, ssim_data]):
+                    if metric_name in metrics_to_plot:
+                        if bitrate not in metric_dict[metric_name]:
+                            metric_dict[metric_name][bitrate] = {}
+                        for key, values in metric_data.items():
+                            if key == 'n': 
+                                continue
 
-    fig.update_layout(
-        autosize=False,
-        height=10000,
-        width = 2000,  
-        showlegend=True,
-         margin=dict(l=0, r=0, t=0, b=0),
-        # xaxis=dict(
-        #     rangeslider=dict(visible=True),
-        #     type="linear"
-        # ),
-        font=dict(
-            size=10,
-            color='#000000'
-        )
-    )
+                            if 'n' in metric_data: 
+                                x_values = metric_data['n']
+                            else:
+                                x_values = list(range(1, len(values) + 1))  
 
-    fig.show()
+                            if key not in metric_dict[metric_name][bitrate]:
+                                metric_dict[metric_name][bitrate][key] = []
+                            metric_dict[metric_name][bitrate][key].append(
+                                go.Scatter(x=x_values, y=values, mode='lines', name=f"{codec} - {key}")
+                            )
+    
+    print("dict len: ", len(metric_dict))
 
-metrics_h264 = "D:\SystemFolders\Videos\BBBunny\output_h264_vs_output_metrics.txt"
-metrics_h265 = "D:\SystemFolders\Videos\BBBunny\output_h265_vs_output_metrics.txt"
-metrics_vp9 = "D:\SystemFolders\Videos\BBBunny\output_vp9_vs_output_metrics.txt"
-metrics_av1 = "D:\SystemFolders\Videos\BBBunny\output_av1_vs_output_metrics.txt"
+    for metric_name, traces in metric_dict.items():
+        if metric_name in metrics_to_plot:
+            for bitrate, traces_data in traces.items():
+                fig = make_subplots(rows=1, cols=1, subplot_titles=(metrics[metric_name],))
+                for key, trace_set in traces_data.items(): 
+                    for t in trace_set:
+                        fig.add_trace(t, row=1, col=1)
 
-h264_vmaf, h264_psnr, h264_ssim = parse_json_metrics(metrics_h264)
-h265_vmaf, h265_psnr, h265_ssim = parse_json_metrics(metrics_h265)
-vp9_vmaf, vp9_psnr, vp9_ssim = parse_json_metrics(metrics_vp9)
-av1_vmaf, av1_psnr, av1_ssim = parse_json_metrics(metrics_av1)
+                fig.update_layout(title=f"{metrics[metric_name]} at {bitrate}")
+                fig.show()
+
+plot_metrics_from_files("D:\\SystemFolders\\Videos\\video_samples", ['vmaf', 'psnr'])
 
 
-
-vmaf_data_list = [h264_vmaf, h265_vmaf, vp9_vmaf, av1_vmaf]
-psnr_data_list = [h264_psnr, h265_psnr, vp9_psnr, av1_psnr]
-ssim_data_list = [h264_ssim, h265_ssim, vp9_ssim, av1_ssim]
-codec_names = ['H264', 'H265', 'VP9', 'AV1']
-
-plot_metrics(vmaf_data_list, codec_names, "VMAF")
-plot_metrics(ssim_data_list, codec_names, "SSIM")
-plot_metrics(psnr_data_list, codec_names, "PSNR")
