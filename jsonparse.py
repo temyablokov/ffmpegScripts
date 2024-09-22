@@ -1,69 +1,19 @@
 import json
+import pandas as pd
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 import re
 import os
 
 def parse_json_metrics(file):
-
     with open(file, 'r') as file:
-        content = file.read()
+        content = json.load(file)
 
-    vmaf_dict = {
-        # "integer_adm2": [],
-        # "integer_adm_scale0": [],
-        # "integer_adm_scale1": [],
-        # "integer_adm_scale2": [],
-        # "integer_adm_scale3": [],
-        # "integer_motion2": [],
-        # "integer_motion": [],
-        # "integer_vif_scale0": [],
-        # "integer_vif_scale1": [],
-        # "integer_vif_scale2": [],
-        # "integer_vif_scale3": [],
-        "vmaf": [],
-        "n": []
-    }
+    vmaf_df = pd.json_normalize(content['vmaf'])
+    psnr_df = pd.json_normalize(content['psnr'])
+    ssim_df = pd.json_normalize(content['ssim'])
 
-    psnr_dict = {
-                "n": [],
-                # "mse_avg": [],
-                # "mse_y": [],
-                # "mse_u": [],
-                # "mse_v": [],
-                "psnr_avg": []
-                # "psnr_y": [],
-                # "psnr_u": [],
-                # "psnr_v": []
-            }
-
-    ssim_dict = {
-                # "n": [],
-                # "ssim_y": [],
-                # "ssim_u": [],
-                # "ssim_v": [],
-                # "ssim_avg": []
-            }
-
-    vmaf_keys = vmaf_dict.keys()
-    ssim_keys = ssim_dict.keys()
-    psnr_keys = psnr_dict.keys()
-
-    data = json.loads(content)
-
-    for item in data['vmaf']:
-        for key in vmaf_keys:
-            vmaf_dict[key].append(item[key])
-
-    for item in data['psnr']:
-        for key in psnr_keys:
-            psnr_dict[key].append(item[key])
-
-    for item in data['ssim']:
-        for key in ssim_keys:
-            ssim_dict[key].append(item[key])
-
-    return vmaf_dict, psnr_dict, ssim_dict
+    return vmaf_df, psnr_df, ssim_df
 
 def extract_name(filename):
     pattern = r'(\w+)_lib((\w+[-\w]+)_(\d+)M)_vs_(\w+)_metrics\.txt'
@@ -74,6 +24,29 @@ def extract_name(filename):
         return codec, bitrate
     return None, None
 
+def add_metrics_to_df(df, new_data, codec, bitrate):
+    new_data['codec'] = codec
+    new_data['bitrate'] = bitrate
+    if df is None:
+        return new_data
+    else:
+        return pd.concat([df, new_data], ignore_index=True)
+
+def plot_metrics(df, metrics_to_plot, metric_name):
+    fig = make_subplots(rows=1, cols=1, subplot_titles=(metrics_to_plot[metric_name],))
+    for bitrate in df['bitrate'].unique():
+        bitrate_df = df[df['bitrate'] == bitrate]
+        for column in bitrate_df.columns:
+            if column not in ['n', 'codec', 'bitrate']:
+                for codec in bitrate_df['codec'].unique():
+                    codec_df = bitrate_df[bitrate_df['codec'] == codec]
+                    x_values = codec_df['n'] if 'n' in codec_df.columns else list(range(1, len(codec_df) + 1))
+                    y_values = codec_df[column]
+                    fig.add_trace(go.Scatter(x=x_values, y=y_values, mode='lines', name=f"{codec} - {column}"), row=1, col=1)
+
+    fig.update_layout(title=f"{metrics_to_plot[metric_name]}")
+    fig.show()
+
 def plot_metrics_from_files(dir, metrics_to_plot):
     metrics = {
         'vmaf': 'VMAF Metrics',
@@ -81,50 +54,25 @@ def plot_metrics_from_files(dir, metrics_to_plot):
         'ssim': 'SSIM Metrics'
     }
 
-    metric_dict = {
-        'vmaf': {},
-        'psnr': {},
-        'ssim': {}
-    }
+    vmaf_df = None
+    psnr_df = None
+    ssim_df = None
 
     for filename in os.listdir(dir):
         if filename.endswith('metrics.txt'):
             codec, bitrate = extract_name(filename)
             if codec:
                 vmaf_data, psnr_data, ssim_data = parse_json_metrics(os.path.join(dir, filename))
+                vmaf_df = add_metrics_to_df(vmaf_df, vmaf_data, codec, bitrate)
+                psnr_df = add_metrics_to_df(psnr_df, psnr_data, codec, bitrate)
+                ssim_df = add_metrics_to_df(ssim_df, ssim_data, codec, bitrate)
 
-                for metric_name, metric_data in zip(['vmaf', 'psnr', 'ssim'], [vmaf_data, psnr_data, ssim_data]):
-                    if metric_name in metrics_to_plot:
-                        if bitrate not in metric_dict[metric_name]:
-                            metric_dict[metric_name][bitrate] = {}
-                        for key, values in metric_data.items():
-                            if key == 'n': 
-                                continue
+    if 'vmaf' in metrics_to_plot:
+        plot_metrics(vmaf_df, metrics, 'vmaf')
+    if 'psnr' in metrics_to_plot:
+        plot_metrics(psnr_df, metrics, 'psnr')
+    if 'ssim' in metrics_to_plot:
+        plot_metrics(ssim_df, metrics, 'ssim')
 
-                            if 'n' in metric_data: 
-                                x_values = metric_data['n']
-                            else:
-                                x_values = list(range(1, len(values) + 1))  
-
-                            if key not in metric_dict[metric_name][bitrate]:
-                                metric_dict[metric_name][bitrate][key] = []
-                            metric_dict[metric_name][bitrate][key].append(
-                                go.Scatter(x=x_values, y=values, mode='lines', name=f"{codec} - {key}")
-                            )
-    
-    print("dict len: ", len(metric_dict))
-
-    for metric_name, traces in metric_dict.items():
-        if metric_name in metrics_to_plot:
-            for bitrate, traces_data in traces.items():
-                fig = make_subplots(rows=1, cols=1, subplot_titles=(metrics[metric_name],))
-                for key, trace_set in traces_data.items(): 
-                    for t in trace_set:
-                        fig.add_trace(t, row=1, col=1)
-
-                fig.update_layout(title=f"{metrics[metric_name]} at {bitrate}")
-                fig.show()
-
-plot_metrics_from_files("D:\\SystemFolders\\Videos\\video_samples", ['vmaf', 'psnr'])
-
-
+# Uncomment the following line to run the function
+# plot_metrics_from_files("D:\\SystemFolders\\Videos\\video_samples", ['vmaf', 'psnr'])
