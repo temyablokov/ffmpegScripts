@@ -74,5 +74,5 @@ def plot_metrics_from_files(dir, metrics_to_plot):
     if 'ssim' in metrics_to_plot:
         plot_metrics(ssim_df, metrics, 'ssim')
 
-# Uncomment the following line to run the function
-# plot_metrics_from_files("D:\\SystemFolders\\Videos\\video_samples", ['vmaf', 'psnr'])
+
+plot_metrics_from_files("D:\\SystemFolders\\Videos\\video_samples", ['vmaf', 'psnr'])
